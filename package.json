@@ -15,7 +15,12 @@
     "pdf",
     "api",
     "converter",
-    "privacy"
+    "privacy",
+    "s3",
+    "google cloud storage",
+    "azure blob storage",
+    "cloudflare r2",
+    "backblaze b2"
   ],
   "type": "module",
   "main": "./dist/cjs/index.js",

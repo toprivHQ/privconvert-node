@@ -74,7 +74,35 @@ The file moves between your storage and PrivConvert from wherever this code runs
 npm install @aws-sdk/client-s3 @google-cloud/storage @azure/storage-blob @azure/identity
 ```
 
-**Backblaze B2, Cloudflare R2 and other S3-compatible storage.** Use an `s3://` address and an S3 client pointed at the provider:
+**Cloudflare R2, Backblaze B2 and other S3-compatible storage.** Use an `s3://` address and an S3 client pointed at the provider.
+
+### Cloudflare R2
+
+Convert files in an R2 bucket and write the result back to R2. Create an R2 API token with read and write access to the bucket, and use your Cloudflare account ID in the endpoint:
+
+```js
+import { S3Client } from "@aws-sdk/client-s3";
+import { PrivConvert } from "privconvert";
+
+const r2 = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  },
+});
+
+const pc = new PrivConvert();
+await pc.convertStorage("word-to-pdf", "s3://my-bucket/contracts/input.docx", "s3://my-bucket/contracts/output.pdf", {
+  s3Client: r2,
+  overwrite: false,
+});
+```
+
+The file goes from R2 to PrivConvert and back from wherever this code runs. Your R2 keys stay with you.
+
+### Backblaze B2
 
 ```js
 import { S3Client } from "@aws-sdk/client-s3";
@@ -83,7 +111,7 @@ const b2 = new S3Client({ endpoint: "https://s3.us-east-005.backblazeb2.com", re
 await pc.convertStorage("word-to-pdf", "s3://my-bucket/input.docx", "s3://my-bucket/output.pdf", { s3Client: b2 });
 ```
 
-**Options.**
+### Options
 
 ```js
 await pc.convertStorage("word-to-pdf", "gs://in-bucket/contract.docx", "s3://out-bucket/contract.pdf", {
