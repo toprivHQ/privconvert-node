@@ -10,8 +10,10 @@ Official Node.js client for the [PrivConvert API](https://privconvert.com/develo
 ## Install
 
 ```bash
-npm install privconvert
+npm install github:toprivHQ/privconvert-node
 ```
+
+The package is not on the npm registry yet. Until it is, install it straight from this repository; it builds itself on install.
 
 ## Quick start
 
@@ -101,13 +103,13 @@ Every error is a `PrivConvertError` with `status`, `code`, `message` and `retryA
 | `ConcurrencyLimitError` | Too many conversions at once (429) |
 | `ServerError` | Problem on our side (5xx) |
 
-Short 429 and 503 responses are retried automatically (`maxRetries: 2`), honouring `Retry-After`. A long `Retry-After`, which means the monthly quota is used up, throws at once instead of sleeping.
+Short 429, 502, 503 and 504 responses are retried automatically (`maxRetries: 2`), honouring `Retry-After`. A long `Retry-After`, which means the monthly quota is used up, throws at once instead of sleeping.
 
 ## Usage and limits
 
 ```js
 await pc.me();
-// { tier: 'growth', quota: 50000, used: 1234, remaining: 48766, rpm: 120, ... }
+// { tier: 'growth', quota: 25000, used: 1234, remaining: 23766, rpm: 120, ... }
 ```
 
 ## Security notes
@@ -115,7 +117,6 @@ await pc.me();
 - The key is read from `PRIVCONVERT_API_KEY` or passed explicitly, and never appears in `console.log`, `util.inspect` or `JSON.stringify` output.
 - Requests go over HTTPS only. A plain `http://` base URL is refused.
 - This package writes nothing to disk except where you call `result.save()`.
-- Releases are published from GitHub Actions with npm provenance, so every version links to the exact source commit it was built from.
 
 ## Links
 

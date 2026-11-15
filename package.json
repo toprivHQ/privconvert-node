@@ -32,7 +32,8 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/fix-cjs.mjs",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/fix-cjs.mjs",
+    "prepare": "npm run build",
     "test": "npm run build && node --test test/offline.test.mjs",
     "prepublishOnly": "npm test"
   },
