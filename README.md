@@ -10,10 +10,10 @@ Official Node.js client for the [PrivConvert API](https://privconvert.com/develo
 ## Install
 
 ```bash
-npm install github:toprivHQ/privconvert-node
+npm install github:toprivHQ/privconvert-node#v0.1.0
 ```
 
-The package is not on the npm registry yet. Until it is, install it straight from this repository; it builds itself on install.
+The package is not on the npm registry yet. Until it is, install it straight from this repository. Always pin a release tag (`#v0.1.0`) rather than the main branch, so you get exactly the reviewed code. The install compiles the TypeScript source with the exact compiler version locked in `package-lock.json`; there are no `preinstall` or `postinstall` scripts.
 
 ## Quick start
 
