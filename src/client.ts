@@ -1,7 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PrivConvertError, STATUS_BY_CODE, errorFor } from "./errors.js";
+import { PrivConvertError, STATUS_BY_CODE, StorageError, errorFor } from "./errors.js";
+import { exists, loadS3, parseLocation, readObject, show, writeObject, type S3ClientLike } from "./storage.js";
 import { VERSION } from "./version.js";
 
 export const DEFAULT_BASE_URL = "https://privconvert.com/api";
@@ -184,6 +185,39 @@ export class PrivConvert {
       form.push(["files", blob, name === "file" ? `file${i + 1}` : name]);
     }
     return this.requestFile("POST", "/convert-batch", { form });
+  }
+
+  /**
+   * Convert a file in cloud storage and write the result back to storage.
+   *
+   * `source` and `destination` are `s3://bucket/key` locations. The file moves
+   * between your bucket and PrivConvert from wherever this code runs, using your
+   * own AWS credentials (the default AWS SDK chain, or `s3Client`). Your
+   * credentials are never sent to PrivConvert. Needs `@aws-sdk/client-s3`.
+   *
+   * `uploadParams` go to `PutObject`, e.g. `{ ServerSideEncryption: "aws:kms" }`.
+   * With `overwrite: false` an existing destination is left untouched and a
+   * `StorageError` is thrown before any credit is spent.
+   */
+  async convertStorage(
+    tool: string,
+    source: string,
+    destination: string,
+    opts: { params?: Params; s3Client?: S3ClientLike; overwrite?: boolean; uploadParams?: Record<string, unknown> } = {},
+  ): Promise<Result> {
+    const t = checkTool(tool);
+    const src = parseLocation(source);
+    const dst = parseLocation(destination);
+    const overwrite = opts.overwrite ?? true;
+    const mod = await loadS3();
+    const client = opts.s3Client ?? new mod.S3Client({});
+    if (!overwrite && (await exists(mod, client, dst))) {
+      throw new StorageError(`${show(dst)} already exists.`, { code: "DestinationExists" });
+    }
+    const data = await readObject(mod, client, src);
+    const result = await this.convert(t, data, { filename: basename(src.key), params: opts.params });
+    await writeObject(mod, client, dst, result.content, result.contentType, { overwrite, uploadParams: opts.uploadParams });
+    return result;
   }
 
   // ── async jobs ───────────────────────────────────────────────────────

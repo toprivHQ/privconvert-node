@@ -12,7 +12,9 @@ export {
   ServerError,
   JobNotFoundError,
   JobExpiredError,
+  StorageError,
 } from "./errors.js";
+export type { S3ClientLike } from "./storage.js";
 export { verifyWebhook, WebhookVerificationError } from "./webhooks.js";
 export type { VerifyOptions } from "./webhooks.js";
 export { VERSION } from "./version.js";

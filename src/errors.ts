@@ -32,6 +32,11 @@ export class ServerError extends PrivConvertError {}
 export class JobNotFoundError extends PrivConvertError {}
 /** 410: the job result passed its retention window and was deleted. */
 export class JobExpiredError extends PrivConvertError {}
+/**
+ * Reading from or writing to your cloud storage failed. `code` holds the
+ * provider's error code when there is one, e.g. `NoSuchKey` or `AccessDenied`.
+ */
+export class StorageError extends PrivConvertError {}
 
 export const STATUS_BY_CODE: Record<string, number> = {
   bad_request: 400,

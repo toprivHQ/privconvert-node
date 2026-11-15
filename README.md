@@ -2,7 +2,7 @@
 
 Official Node.js client for the [PrivConvert API](https://privconvert.com/developers/): file conversion for your app with zero data retention. Every file is processed in memory on our side and never written to disk.
 
-- No runtime dependencies
+- No runtime dependencies (S3 support uses the AWS SDK only if you install it)
 - Node.js 18.17+, ESM and CommonJS, TypeScript types included
 - Large files (above 90 MB) are uploaded in parts automatically
 - Async jobs, webhook signature verification and typed errors included
@@ -10,10 +10,10 @@ Official Node.js client for the [PrivConvert API](https://privconvert.com/develo
 ## Install
 
 ```bash
-npm install github:toprivHQ/privconvert-node#v0.1.0
+npm install github:toprivHQ/privconvert-node#v0.2.0
 ```
 
-The package is not on the npm registry yet. Until it is, install it straight from this repository. Always pin a release tag (`#v0.1.0`) rather than the main branch, so you get exactly the reviewed code. The install compiles the TypeScript source with the exact compiler version locked in `package-lock.json`; there are no `preinstall` or `postinstall` scripts.
+The package is not on the npm registry yet. Until it is, install it straight from this repository. Always pin a release tag (`#v0.2.0`) rather than the main branch, so you get exactly the reviewed code. The install compiles the TypeScript source with the exact compiler version locked in `package-lock.json`; there are no `preinstall` or `postinstall` scripts.
 
 ## Quick start
 
@@ -51,6 +51,32 @@ const zip = await pc.convertBatch("png-to-jpg", ["a.png", "b.png", "c.png"]);
 await zip.save("converted.zip");
 if (zip.partial) console.log(`${zip.failedCount} files were skipped, see PRIVCONVERT-ERRORS.txt in the ZIP`);
 ```
+
+## Files in Amazon S3
+
+Convert a file that lives in S3 and write the result back to S3. Install the AWS SDK next to this package:
+
+```bash
+npm install @aws-sdk/client-s3
+```
+
+```js
+await pc.convertStorage("word-to-pdf", "s3://my-bucket/input.docx", "s3://my-bucket/output.pdf");
+```
+
+The file moves between your bucket and PrivConvert from wherever this code runs, using your own AWS credentials (the default AWS SDK chain: environment, profile or IAM role). Your credentials are never sent to PrivConvert, and we never get access to your bucket. Run it in the same region as the bucket and the transfer is fast and cheap.
+
+```js
+import { S3Client } from "@aws-sdk/client-s3";
+
+await pc.convertStorage("word-to-pdf", "s3://in-bucket/contract.docx", "s3://out-bucket/contract.pdf", {
+  s3Client: new S3Client({ region: "eu-west-1" }),
+  uploadParams: { ServerSideEncryption: "aws:kms" }, // passed to PutObject
+  overwrite: false, // leave an existing file alone, before any credit is spent
+});
+```
+
+Storage problems throw `StorageError`, with the provider's code in `code` (for example `NoSuchKey` or `AccessDenied`). Google Cloud Storage and Azure Blob Storage are planned.
 
 ## Async jobs
 
@@ -102,6 +128,7 @@ Every error is a `PrivConvertError` with `status`, `code`, `message` and `retryA
 | `RateLimitError` | Per-minute rate or monthly quota exceeded (429) |
 | `ConcurrencyLimitError` | Too many conversions at once (429) |
 | `ServerError` | Problem on our side (5xx) |
+| `StorageError` | Reading from or writing to your S3 bucket failed |
 
 Short 429, 502, 503 and 504 responses are retried automatically (`maxRetries: 2`), honouring `Retry-After`. A long `Retry-After`, which means the monthly quota is used up, throws at once instead of sleeping.
 
@@ -117,6 +144,7 @@ await pc.me();
 - The key is read from `PRIVCONVERT_API_KEY` or passed explicitly, and never appears in `console.log`, `util.inspect` or `JSON.stringify` output.
 - Requests go over HTTPS only. A plain `http://` base URL is refused.
 - This package writes nothing to disk except where you call `result.save()`.
+- `convertStorage` keeps the file in memory between your bucket and the API. Your cloud credentials stay with you.
 
 ## Links
 

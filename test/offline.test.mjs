@@ -48,6 +48,25 @@ test("client: rejects bad tool ids", async () => {
   }
 });
 
+test("storage: location parsing and missing AWS SDK", async () => {
+  const c = new pc.PrivConvert({ apiKey: "pk_live_x" });
+  for (const [src, dst] of [
+    ["s3://bkt/", "s3://bkt/a.pdf"],
+    ["s3://bkt/dir/", "s3://bkt/a.pdf"],
+    ["s3://UPPER/x", "s3://bkt/a.pdf"],
+    ["s3://ab/x", "s3://bkt/a.pdf"],
+    ["bkt/x", "s3://bkt/a.pdf"],
+    ["s3://bkt/a.docx", "gs://bkt/a.pdf"],
+    ["s3://bkt/a.docx", "https://bkt.s3.amazonaws.com/a.pdf"],
+  ]) {
+    await assert.rejects(c.convertStorage("word-to-pdf", src, dst), pc.StorageError, `${src} -> ${dst}`);
+  }
+  await assert.rejects(
+    c.convertStorage("word-to-pdf", "s3://bkt/a.docx", "s3://bkt/a.pdf"),
+    (e) => e instanceof pc.StorageError && /npm install @aws-sdk\/client-s3/.test(e.message),
+  );
+});
+
 test("cjs build loads", () => {
   const require = createRequire(import.meta.url);
   const cjs = require("../dist/cjs/index.js");
