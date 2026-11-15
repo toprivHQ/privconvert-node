@@ -2,7 +2,7 @@
 
 Official Node.js client for the [PrivConvert API](https://privconvert.com/developers/): file conversion for your app with zero data retention. Every file is processed in memory on our side and never written to disk.
 
-- No runtime dependencies (S3 support uses the AWS SDK only if you install it)
+- No runtime dependencies (cloud storage support uses the cloud SDKs only if you install them)
 - Node.js 18.17+, ESM and CommonJS, TypeScript types included
 - Large files (above 90 MB) are uploaded in parts automatically
 - Async jobs, webhook signature verification and typed errors included
@@ -10,10 +10,10 @@ Official Node.js client for the [PrivConvert API](https://privconvert.com/develo
 ## Install
 
 ```bash
-npm install github:toprivHQ/privconvert-node#v0.2.0
+npm install github:toprivHQ/privconvert-node#v0.3.0
 ```
 
-The package is not on the npm registry yet. Until it is, install it straight from this repository. Always pin a release tag (`#v0.2.0`) rather than the main branch, so you get exactly the reviewed code. The install compiles the TypeScript source with the exact compiler version locked in `package-lock.json`; there are no `preinstall` or `postinstall` scripts.
+The package is not on the npm registry yet. Until it is, install it straight from this repository. Always pin a release tag (`#v0.3.0`) rather than the main branch, so you get exactly the reviewed code. The install compiles the TypeScript source with the exact compiler version locked in `package-lock.json`; there are no `preinstall` or `postinstall` scripts.
 
 ## Quick start
 
@@ -52,31 +52,47 @@ await zip.save("converted.zip");
 if (zip.partial) console.log(`${zip.failedCount} files were skipped, see PRIVCONVERT-ERRORS.txt in the ZIP`);
 ```
 
-## Files in Amazon S3
+## Files in cloud storage
 
-Convert a file that lives in S3 and write the result back to S3. Install the AWS SDK next to this package:
-
-```bash
-npm install @aws-sdk/client-s3
-```
+Convert a file in Amazon S3, Google Cloud Storage or Azure Blob Storage and write the result back:
 
 ```js
 await pc.convertStorage("word-to-pdf", "s3://my-bucket/input.docx", "s3://my-bucket/output.pdf");
+await pc.convertStorage("word-to-pdf", "gs://my-bucket/input.docx", "gs://my-bucket/output.pdf");
+await pc.convertStorage("word-to-pdf", "az://myaccount/my-container/input.docx", "az://myaccount/my-container/output.pdf");
 ```
 
-The file moves between your bucket and PrivConvert from wherever this code runs, using your own AWS credentials (the default AWS SDK chain: environment, profile or IAM role). Your credentials are never sent to PrivConvert, and we never get access to your bucket. Run it in the same region as the bucket and the transfer is fast and cheap.
+The cloud is picked from the address. Azure also accepts the blob URL from the portal (`https://myaccount.blob.core.windows.net/my-container/input.docx`). Source and destination can be in different clouds.
+
+The file moves between your storage and PrivConvert from wherever this code runs, using your own credentials. Your credentials are never sent to PrivConvert, and we never get access to your storage. Run it in the same region as the bucket and the transfer is fast and cheap.
+
+**Credentials.** Each cloud's standard sign-in is used: for S3 the default AWS SDK chain (environment, profile or IAM role), for Google Application Default Credentials, for Azure `AZURE_STORAGE_CONNECTION_STRING` or `DefaultAzureCredential` (managed identity, environment, Azure CLI). To control it yourself, pass `s3Client`, `gcsClient` (a `Storage`) or `azureClient` (a `BlobServiceClient`).
+
+**Libraries.** The cloud SDKs you already use are picked up automatically. If one is missing, this installs all of them:
+
+```bash
+npm install @aws-sdk/client-s3 @google-cloud/storage @azure/storage-blob @azure/identity
+```
+
+**Backblaze B2, Cloudflare R2 and other S3-compatible storage.** Use an `s3://` address and an S3 client pointed at the provider:
 
 ```js
 import { S3Client } from "@aws-sdk/client-s3";
 
-await pc.convertStorage("word-to-pdf", "s3://in-bucket/contract.docx", "s3://out-bucket/contract.pdf", {
-  s3Client: new S3Client({ region: "eu-west-1" }),
-  uploadParams: { ServerSideEncryption: "aws:kms" }, // passed to PutObject
+const b2 = new S3Client({ endpoint: "https://s3.us-east-005.backblazeb2.com", region: "us-east-005" });
+await pc.convertStorage("word-to-pdf", "s3://my-bucket/input.docx", "s3://my-bucket/output.pdf", { s3Client: b2 });
+```
+
+**Options.**
+
+```js
+await pc.convertStorage("word-to-pdf", "gs://in-bucket/contract.docx", "s3://out-bucket/contract.pdf", {
+  uploadParams: { ServerSideEncryption: "aws:kms" }, // passed to the destination's upload call
   overwrite: false, // leave an existing file alone, before any credit is spent
 });
 ```
 
-Storage problems throw `StorageError`, with the provider's code in `code` (for example `NoSuchKey` or `AccessDenied`). Google Cloud Storage and Azure Blob Storage are planned.
+Storage problems throw `StorageError`, with the provider's code in `code` (for example `NoSuchKey`, `NotFound`, `BlobNotFound` or `AccessDenied`).
 
 ## Async jobs
 
@@ -128,7 +144,7 @@ Every error is a `PrivConvertError` with `status`, `code`, `message` and `retryA
 | `RateLimitError` | Per-minute rate or monthly quota exceeded (429) |
 | `ConcurrencyLimitError` | Too many conversions at once (429) |
 | `ServerError` | Problem on our side (5xx) |
-| `StorageError` | Reading from or writing to your S3 bucket failed |
+| `StorageError` | Reading from or writing to your cloud storage failed |
 
 Short 429, 502, 503 and 504 responses are retried automatically (`maxRetries: 2`), honouring `Retry-After`. A long `Retry-After`, which means the monthly quota is used up, throws at once instead of sleeping.
 
@@ -144,7 +160,7 @@ await pc.me();
 - The key is read from `PRIVCONVERT_API_KEY` or passed explicitly, and never appears in `console.log`, `util.inspect` or `JSON.stringify` output.
 - Requests go over HTTPS only. A plain `http://` base URL is refused.
 - This package writes nothing to disk except where you call `result.save()`.
-- `convertStorage` keeps the file in memory between your bucket and the API. Your cloud credentials stay with you.
+- `convertStorage` keeps the file in memory between your storage and the API. Your cloud credentials stay with you.
 
 ## Links
 

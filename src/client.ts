@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrivConvertError, STATUS_BY_CODE, StorageError, errorFor } from "./errors.js";
-import { exists, loadS3, parseLocation, readObject, show, writeObject, type S3ClientLike } from "./storage.js";
+import { backend, parseLocation, show, type S3ClientLike } from "./storage.js";
 import { VERSION } from "./version.js";
 
 export const DEFAULT_BASE_URL = "https://privconvert.com/api";
@@ -190,33 +190,50 @@ export class PrivConvert {
   /**
    * Convert a file in cloud storage and write the result back to storage.
    *
-   * `source` and `destination` are `s3://bucket/key` locations. The file moves
-   * between your bucket and PrivConvert from wherever this code runs, using your
-   * own AWS credentials (the default AWS SDK chain, or `s3Client`). Your
-   * credentials are never sent to PrivConvert. Needs `@aws-sdk/client-s3`.
+   * Locations are `s3://bucket/key`, `gs://bucket/key`,
+   * `az://account/container/blob` or
+   * `https://account.blob.core.windows.net/container/blob`. Source and
+   * destination may be in different clouds. The file moves between your storage
+   * and PrivConvert from wherever this code runs, using your own credentials
+   * (each provider's default chain, or the client you pass). Your credentials
+   * are never sent to PrivConvert. The cloud SDKs are used if installed.
    *
-   * `uploadParams` go to `PutObject`, e.g. `{ ServerSideEncryption: "aws:kms" }`.
-   * With `overwrite: false` an existing destination is left untouched and a
-   * `StorageError` is thrown before any credit is spent.
+   * For S3-compatible storage such as Backblaze B2 or Cloudflare R2, pass an
+   * `s3Client` created with that provider's `endpoint`.
+   *
+   * `uploadParams` go to the destination's upload call (`PutObject`,
+   * `File.save` or `BlockBlobClient.upload`). With `overwrite: false` an
+   * existing destination is left untouched and a `StorageError` is thrown
+   * before any credit is spent.
    */
   async convertStorage(
     tool: string,
     source: string,
     destination: string,
-    opts: { params?: Params; s3Client?: S3ClientLike; overwrite?: boolean; uploadParams?: Record<string, unknown> } = {},
+    opts: {
+      params?: Params;
+      s3Client?: S3ClientLike;
+      /** A `Storage` from `@google-cloud/storage`. */
+      gcsClient?: unknown;
+      /** A `BlobServiceClient` from `@azure/storage-blob`. */
+      azureClient?: unknown;
+      overwrite?: boolean;
+      uploadParams?: Record<string, unknown>;
+    } = {},
   ): Promise<Result> {
     const t = checkTool(tool);
     const src = parseLocation(source);
     const dst = parseLocation(destination);
     const overwrite = opts.overwrite ?? true;
-    const mod = await loadS3();
-    const client = opts.s3Client ?? new mod.S3Client({});
-    if (!overwrite && (await exists(mod, client, dst))) {
+    const reader = await backend(src, opts);
+    const same = src.provider === dst.provider && src.account === dst.account;
+    const writer = same ? reader : await backend(dst, opts);
+    if (!overwrite && (await writer.exists(dst))) {
       throw new StorageError(`${show(dst)} already exists.`, { code: "DestinationExists" });
     }
-    const data = await readObject(mod, client, src);
+    const data = await reader.read(src);
     const result = await this.convert(t, data, { filename: basename(src.key), params: opts.params });
-    await writeObject(mod, client, dst, result.content, result.contentType, { overwrite, uploadParams: opts.uploadParams });
+    await writer.write(dst, result.content, result.contentType, overwrite, opts.uploadParams ?? {});
     return result;
   }
 

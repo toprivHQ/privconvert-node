@@ -48,7 +48,7 @@ test("client: rejects bad tool ids", async () => {
   }
 });
 
-test("storage: location parsing and missing AWS SDK", async () => {
+test("storage: location parsing and missing cloud SDKs", async () => {
   const c = new pc.PrivConvert({ apiKey: "pk_live_x" });
   for (const [src, dst] of [
     ["s3://bkt/", "s3://bkt/a.pdf"],
@@ -56,14 +56,28 @@ test("storage: location parsing and missing AWS SDK", async () => {
     ["s3://UPPER/x", "s3://bkt/a.pdf"],
     ["s3://ab/x", "s3://bkt/a.pdf"],
     ["bkt/x", "s3://bkt/a.pdf"],
-    ["s3://bkt/a.docx", "gs://bkt/a.pdf"],
+    ["s3://bkt/a.docx", "ftp://bkt/a.pdf"],
     ["s3://bkt/a.docx", "https://bkt.s3.amazonaws.com/a.pdf"],
+    ["s3://bkt/a.docx", "http://acct01.blob.core.windows.net/cc1/a.pdf"],
+    ["s3://bkt/a.docx", "https://acct01.blob.core.windows.net.evil.com/cc1/a.pdf"],
+    ["s3://bkt/a.docx", "az://acct01/cc1/"],
+    ["gs://b/x", "s3://bkt/a.pdf"],
+    ["s3://bkt/a.docx?x=1", "s3://bkt/a.pdf"],
   ]) {
     await assert.rejects(c.convertStorage("word-to-pdf", src, dst), pc.StorageError, `${src} -> ${dst}`);
   }
+  for (const src of ["s3://bkt/a.docx", "gs://bkt/a.docx", "az://acct01/cc1/a.docx", "https://acct01.blob.core.windows.net/cc1/a.docx"]) {
+    await assert.rejects(
+      c.convertStorage("word-to-pdf", src, "s3://bkt/a.pdf"),
+      (e) => e instanceof pc.StorageError && /npm install @aws-sdk\/client-s3 @google-cloud\/storage/.test(e.message),
+      src,
+    );
+  }
   await assert.rejects(
-    c.convertStorage("word-to-pdf", "s3://bkt/a.docx", "s3://bkt/a.pdf"),
-    (e) => e instanceof pc.StorageError && /npm install @aws-sdk\/client-s3/.test(e.message),
+    c.convertStorage("word-to-pdf", "az://acct01/cc1/a.docx", "az://acct01/cc1/a.pdf", {
+      azureClient: { accountName: "other01" },
+    }),
+    (e) => e instanceof pc.StorageError && /other01/.test(e.message),
   );
 });
 
